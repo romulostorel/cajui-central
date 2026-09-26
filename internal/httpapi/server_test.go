@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/storage"
 	"github.com/cajui/cajui-central/internal/telemetry"
 	"github.com/cajui/cajui-central/internal/workspace"
@@ -140,6 +141,9 @@ func TestStorageFailure(t *testing.T) {
 func (brokenRepo) RecentSamples(context.Context, int) ([]telemetry.StoredSample, error) {
 	return nil, errors.New("database failure")
 }
+func (brokenRepo) DeviceStates(context.Context) ([]devicestate.Stored, error) {
+	return nil, errors.New("private database failure")
+}
 func (brokenRepo) Devices(context.Context, time.Time) ([]telemetry.Device, error) {
 	return nil, errors.New("database failure")
 }
@@ -155,11 +159,19 @@ func TestMQTTSampleRoutesAndDashboard(t *testing.T) {
 	if _, err = db.InsertSample(context.Background(), sample, time.Now().Add(-time.Minute)); err != nil {
 		t.Fatal(err)
 	}
+	stateJSON := `{"version":1,"source_id":"source","device_id":"00000000000000d1","role":"receiver","model":"bench-<receiver>"}`
+	state, err := devicestate.Decode("source", "00000000000000d1", []byte(stateJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = db.SaveDeviceState(context.Background(), state, time.Now(), false); err != nil {
+		t.Fatal(err)
+	}
 	h, err := New(db, token, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/api/v1/samples", "/api/v1/devices"} {
+	for _, path := range []string{"/api/v1/samples", "/api/v1/devices", "/api/v1/device-states"} {
 		req := httptest.NewRequest("GET", path, nil)
 		out := httptest.NewRecorder()
 		h.ServeHTTP(out, req)
@@ -175,13 +187,16 @@ func TestMQTTSampleRoutesAndDashboard(t *testing.T) {
 	}
 	out := httptest.NewRecorder()
 	h.ServeHTTP(out, httptest.NewRequest("GET", "http://localhost/", nil))
-	for _, want := range []string{"No recent samples", "21.5", "source"} {
+	for _, want := range []string{"No recent samples", "21.5", "source", `"device_states":[{`, `bench-\u003creceiver\u003e`} {
 		if !strings.Contains(out.Body.String(), want) {
-			t.Fatal(out.Body.String())
+			t.Fatal(want, out.Body.String())
 		}
 	}
+	if strings.Contains(out.Body.String(), "bench-<receiver>") {
+		t.Fatal("device text reached the page unescaped")
+	}
 	broken, _ := New(brokenRepo{}, token, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	for _, path := range []string{"/api/v1/samples", "/api/v1/devices"} {
+	for _, path := range []string{"/api/v1/samples", "/api/v1/devices", "/api/v1/device-states"} {
 		req := httptest.NewRequest("GET", path, nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		out = httptest.NewRecorder()

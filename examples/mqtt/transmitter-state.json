@@ -1,0 +1,1 @@
+{"version":1,"source_id":"demo-source","device_id":"00000000000000d2","role":"transmitter","receiver_id":"00000000000000d1","binding":"active","model":null,"firmware":null,"last_frame":{"counter":124,"rssi_dbm":-82,"snr_db":9.5,"receiver_uptime_s":3590},"parameters":{"interval_s":null,"power_dbm":null},"pending":[]}

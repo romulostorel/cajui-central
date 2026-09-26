@@ -36,7 +36,14 @@ generate() {
       continue
     fi
     printf '%s:%s\n' "$name" "$(cat "$path")" >> "$auth/passwords.tmp"
-    printf '\nuser %s\ntopic write telemetry/v1/%s/+/samples\n' "$name" "$name" >> "$auth/acl.tmp"
+    # Telemetry plus the management channel of cajui-firmware (docs/management-v1.md).
+    {
+      printf '\nuser %s\ntopic write telemetry/v1/%s/+/samples\n' "$name" "$name"
+      printf 'topic write manage/v1/%s/+/availability\n' "$name"
+      printf 'topic write manage/v1/%s/+/state\n' "$name"
+      printf 'topic write manage/v1/%s/+/results\n' "$name"
+      printf 'topic read manage/v1/%s/+/commands\n' "$name"
+    } >> "$auth/acl.tmp"
   done
   mosquitto_passwd -U "$auth/passwords.tmp"
   chown -R mosquitto:mosquitto "$auth"

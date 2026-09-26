@@ -264,3 +264,57 @@ en-US:
       one: '%{count} second'
       other: '%{count} seconds'
       zero: '%{count} seconds'
+  receivers:
+    heading: Receivers
+    name: Receiver %{id}
+    online: Online
+    offline: Offline
+    unknown: No availability reported
+    firmware: Firmware
+    firmware_pending: "%{version}, awaiting confirmation"
+    local_build: Local build
+    uptime: Running for
+    duration:
+      minutes: '%{count} min'
+      hours: '%{count} h'
+      days: '%{count} d'
+    availability_changed: Connection last changed
+    wifi: Wi-Fi signal
+    queue: Waiting to send
+    queue_value: "%{depth} of %{capacity}"
+    forwarded: Sent to broker
+    forwarded_value:
+      zero: "%{count} readings, no retries"
+      one: "%{count} reading, retries: %{retries}"
+      other: "%{count} readings, retries: %{retries}"
+    reset: Last restart
+    transmitters:
+      zero: No transmitters
+      one: "%{count} transmitter"
+      other: "%{count} transmitters"
+    offline_notice: No connection. Check the receiver's power and Wi-Fi.
+    queue_notice:
+      one: "%{count} reading is waiting to be sent to the broker."
+      other: "%{count} readings are waiting to be sent to the broker."
+    pairing_notice:
+      zero: Pairing is open; no transmitter has asked to join yet.
+      one: Pairing is open; %{count} transmitter asked to join.
+      other: Pairing is open; %{count} transmitters asked to join.
+    pending_notice: A firmware update is running on trial and is confirmed after a minute of normal operation.
+    retained_notice: State received from the broker when Central connected; its age is unknown.
+    binding: Pairing
+    binding_active: Paired
+    binding_pending: Enrolled, not yet active
+    binding_revoked: Revoked
+    receiver: Receiver
+    last_frame: Last radio frame
+    receiver_offline: Its receiver is offline
+    reset_reasons:
+      power_on: Power on
+      software: Software restart
+      panic: Crash
+      watchdog: Watchdog
+      brownout: Low voltage
+      deep_sleep: Wake from sleep
+      external: Reset button
+      other: Other

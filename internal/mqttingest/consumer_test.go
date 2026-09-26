@@ -9,12 +9,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/telemetry"
 )
 
 type repository struct {
-	calls int
-	err   error
+	calls, states, availability int
+	retained                    bool
+	err                         error
+}
+
+func (r *repository) SaveDeviceState(_ context.Context, _ devicestate.State, _ time.Time, retained bool) error {
+	r.states++
+	r.retained = retained
+	return r.err
+}
+func (r *repository) SaveAvailability(_ context.Context, _, _, _ string, _ time.Time, retained bool) error {
+	r.availability++
+	r.retained = retained
+	return r.err
 }
 
 func (r *repository) InsertSample(context.Context, telemetry.Sample, time.Time) (bool, error) {
@@ -45,6 +58,42 @@ func TestHandle(t *testing.T) {
 	}
 	repo.err = errors.New("storage failed")
 	if _, e := c.Handle(context.Background(), topic, b, false); e == nil {
+		t.Fatal("swallowed storage failure")
+	}
+}
+func TestHandleDeviceStateAndAvailability(t *testing.T) {
+	b, e := os.ReadFile("../../examples/mqtt/receiver-state.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	repo := &repository{}
+	c := New(Config{}, repo, nil)
+	state := devicestate.Topic("demo-source", "00000000000000d1", "state")
+	availability := devicestate.Topic("demo-source", "00000000000000d1", "availability")
+	// Retained by design: accepted, and the flag reaches storage.
+	if ok, e := c.Handle(context.Background(), state, b, true); !ok || e != nil || repo.states != 1 || !repo.retained {
+		t.Fatal(ok, e, repo)
+	}
+	if ok, e := c.Handle(context.Background(), availability, []byte("online"), false); !ok || e != nil || repo.availability != 1 || repo.retained {
+		t.Fatal(ok, e, repo)
+	}
+	for _, tc := range []struct {
+		topic string
+		data  []byte
+	}{
+		{state, []byte("{}")},
+		{devicestate.Topic("other", "00000000000000d1", "state"), b},
+		{availability, []byte("maybe")},
+	} {
+		if _, e := c.Handle(context.Background(), tc.topic, tc.data, false); !errors.Is(e, telemetry.ErrInvalid) {
+			t.Fatal(tc.topic, e)
+		}
+	}
+	if repo.calls != 0 || repo.states != 1 || repo.availability != 1 {
+		t.Fatal(repo)
+	}
+	repo.err = errors.New("storage failed")
+	if _, e := c.Handle(context.Background(), state, b, false); e == nil || settled(e) {
 		t.Fatal("swallowed storage failure")
 	}
 }

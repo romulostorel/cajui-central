@@ -1,4 +1,5 @@
-// Package mqttingest consumes an open telemetry stream without publishing application receipts.
+// Package mqttingest consumes an open telemetry stream, and the device state of
+// cajui-firmware receivers, without publishing application receipts.
 package mqttingest
 
 import (
@@ -9,14 +10,24 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/telemetry"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-const Topic = "telemetry/v1/+/+/samples"
+const (
+	Topic             = "telemetry/v1/+/+/samples"
+	StateTopic        = "manage/v1/+/+/state"
+	AvailabilityTopic = "manage/v1/+/+/availability"
+)
+
+// Topics Central subscribes to, all with QoS 1.
+var Topics = map[string]byte{Topic: 1, StateTopic: 1, AvailabilityTopic: 1}
 
 type Repository interface {
 	InsertSample(context.Context, telemetry.Sample, time.Time) (bool, error)
+	SaveDeviceState(context.Context, devicestate.State, time.Time, bool) error
+	SaveAvailability(context.Context, string, string, string, time.Time, bool) error
 }
 type Config struct {
 	URL, ClientID, Username, Password string
@@ -37,8 +48,23 @@ func New(config Config, repo Repository, logger *slog.Logger) *Consumer {
 }
 func (c *Consumer) Connected() bool { return c.connected.Load() }
 
-// Handle rejects retained snapshots: an old retained sample is not a new arrival.
+// Handle rejects retained samples: an old retained sample is not a new arrival. Device
+// state and availability are retained by design and are always handled.
 func (c *Consumer) Handle(ctx context.Context, topic string, payload []byte, retained bool) (bool, error) {
+	if source, device, kind, ok := devicestate.ParseTopic(topic); ok {
+		if kind == "availability" {
+			value, err := devicestate.DecodeAvailability(payload)
+			if err != nil {
+				return false, telemetry.ErrInvalid
+			}
+			return true, c.repo.SaveAvailability(ctx, source, device, value, time.Now(), retained)
+		}
+		state, err := devicestate.Decode(source, device, payload)
+		if err != nil {
+			return false, telemetry.ErrInvalid
+		}
+		return true, c.repo.SaveDeviceState(ctx, state, time.Now(), retained)
+	}
 	if retained {
 		return false, nil
 	}
@@ -86,7 +112,8 @@ func (c *Consumer) Run(ctx context.Context) {
 		}
 	})
 	handler := func(_ mqtt.Client, m mqtt.Message) {
-		if m.Retained() || len(m.Payload()) > telemetry.MaxSampleBytes {
+		_, _, _, managed := devicestate.ParseTopic(m.Topic())
+		if (m.Retained() && !managed) || len(m.Payload()) > telemetry.MaxSampleBytes {
 			m.Ack() // Never ingested: acknowledge so the broker discards it.
 			return
 		}
@@ -113,11 +140,14 @@ func (c *Consumer) Run(ctx context.Context) {
 			retry = min(retry*2, 30*time.Second)
 			continue
 		}
-		subscription := client.Subscribe(Topic, 1, handler)
+		subscription := client.SubscribeMultiple(Topics, handler)
 		subscriptionError := wait(ctx, subscription)
 		if subscriptionError == nil {
-			if result, ok := subscription.(*mqtt.SubscribeToken); !ok || result.Result()[Topic] > 1 {
-				subscriptionError = errors.New("subscription refused")
+			result, ok := subscription.(*mqtt.SubscribeToken)
+			for topic := range Topics {
+				if !ok || result.Result()[topic] > 1 {
+					subscriptionError = errors.New("subscription refused")
+				}
 			}
 		}
 		if subscriptionError != nil {
@@ -148,7 +178,7 @@ func (c *Consumer) Run(ctx context.Context) {
 				switch {
 				case err == nil:
 				case errors.Is(err, telemetry.ErrInvalid) || errors.Is(err, telemetry.ErrConflict):
-					c.logger.Warn("MQTT sample rejected")
+					c.logger.Warn("MQTT message rejected", "topic", m.topic)
 				case ctx.Err() != nil:
 					// Shutdown interrupted it; unacknowledged, it is redelivered on restart.
 				default:

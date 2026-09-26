@@ -7,6 +7,12 @@ import {
   formatUnit,
   csvRows,
   states,
+  receiverLabel,
+  deviceStateFor,
+  firmwareText,
+  uptimeText,
+  receiverSummary,
+  linkText,
 } from "./model.mjs";
 import { icon, metricIcon } from "./icons.mjs";
 import {
@@ -17,6 +23,11 @@ import {
 } from "./workspace-model.mjs";
 import { openLayoutEditor } from "./layout-editor.mjs";
 
+// A value the firmware reported that this version has no text for.
+function known(key, fallback) {
+  const text = t(key);
+  return text === key ? fallback : text;
+}
 export function mountDashboard(root, { state = {}, notify }) {
   let snapshot = state,
     channels = [],
@@ -29,6 +40,7 @@ export function mountDashboard(root, { state = {}, notify }) {
   root.innerHTML = `<header class="page-heading"><div><h1>${t("common.dashboard")}</h1><p>${t("dashboard.description")}</p></div><div class="top-actions"><button class="button" id="organize">${t("dashboard.organize")}</button><button class="button" id="export">${icon("download")}${t("dashboard.export")}</button><button class="button primary" id="refresh">${icon("refresh")}${t("common.refresh")}</button></div></header>
     <div id="fetch-error" class="notice hidden" role="status"></div>
     <section id="summary" class="device-summary" aria-label="${t("dashboard.summary")}"></section>
+    <section id="receivers" class="receiver-strip" aria-label="${t("receivers.heading")}" hidden></section>
     <div class="toolbar"><div class="segmented" aria-label="${t("dashboard.filter")}"><button data-filter="all" aria-pressed="true">${t("dashboard.all")}</button><button data-filter="attention" aria-pressed="false">${t("dashboard.attention")}</button></div><label class="search">${icon("search")}<span class="sr-only">${t("dashboard.search_label")}</span><input id="search" type="search" placeholder="${t("dashboard.search")}" autocomplete="off"></label></div>
     <section id="devices" class="device-groups" aria-label="${t("dashboard.items")}"></section>
     <section class="panel history-panel" id="history-panel" hidden><div class="panel-heading"><div><h2 id="history-heading" tabindex="-1">${t("common.history")}</h2><p id="history-context"></p></div><label><span class="sr-only">${t("dashboard.period")}</span><select id="period" class="input"><option value="24">${t("dashboard.hours24")}</option><option value="6">${t("dashboard.hours6")}</option><option value="1">${t("dashboard.hour")}</option><option value="0">${t("dashboard.all_data")}</option></select></label></div><label for="metric-select">${t("common.measurement")}</label><select id="metric-select" class="input"></select><cj-chart id="history"></cj-chart><div class="plot-footer"><span class="legend" id="chart-legend"></span><span id="plot-count"></span></div></section>
@@ -49,6 +61,91 @@ export function mountDashboard(root, { state = {}, notify }) {
       if (isLinkDiagnostic(c)) c.title = c.metric.toUpperCase();
     }
     if (!channels.some((c) => c.key === selected)) selected = "";
+    // A transmitter whose receiver is offline cannot report: that needs attention too.
+    const deviceStates = snapshot.device_states ?? [];
+    for (const g of groups) {
+      if (g.transport !== "mqtt") continue;
+      const state = deviceStateFor(deviceStates, g.source, g.device);
+      const receiver = state?.receiver_id
+        ? deviceStateFor(deviceStates, g.source, state.receiver_id)
+        : null;
+      g.state = state;
+      g.receiver = receiver;
+      g.receiverOffline = receiver?.availability === "offline";
+      if (g.receiverOffline) g.attention = true;
+    }
+  }
+  function receivers() {
+    return (snapshot.device_states ?? []).filter((s) => s.role === "receiver");
+  }
+  function renderReceivers() {
+    const target = root.querySelector("#receivers");
+    const list = receivers();
+    target.hidden = !list.length;
+    target.innerHTML = list.length
+      ? `<h2>${t("receivers.heading")}</h2><div class="receiver-items"></div>`
+      : "";
+    const now = Date.parse(snapshot.generated_at);
+    for (const r of list) {
+      const summary = receiverSummary(r);
+      const transmitters = (snapshot.device_states ?? []).filter(
+        (s) =>
+          s.role === "transmitter" &&
+          s.source_id === r.source_id &&
+          s.receiver_id === r.device_id &&
+          s.binding !== "revoked",
+      ).length;
+      const wifi = r.wifi?.rssi_dbm;
+      const rows = [
+        [t("receivers.firmware"), firmwareText(r.firmware)],
+        [t("receivers.uptime"), uptimeText(r.uptime_s)],
+        [
+          t("receivers.wifi"),
+          typeof wifi === "number"
+            ? `${formatValue(wifi, 0)} dBm`
+            : t("common.unknown"),
+        ],
+        [
+          t("receivers.queue"),
+          r.queue && typeof r.queue.depth === "number"
+            ? t("receivers.queue_value", {
+                depth: formatValue(r.queue.depth, 0),
+                capacity: formatValue(r.queue.capacity, 0),
+              })
+            : t("common.unknown"),
+        ],
+        [
+          t("receivers.forwarded"),
+          typeof r.forwarding?.published === "number"
+            ? t("receivers.forwarded_value", {
+                count: r.forwarding.published,
+                retries: r.forwarding.retries ?? 0,
+              })
+            : t("common.unknown"),
+        ],
+        [
+          t("receivers.reset"),
+          r.reset_reason
+            ? known(
+                `receivers.reset_reasons.${r.reset_reason}`,
+                t("receivers.reset_reasons.other"),
+              )
+            : t("common.unknown"),
+        ],
+        [
+          t("receivers.availability_changed"),
+          r.availability_at ? age(r.availability_at, now) : t("common.unknown"),
+        ],
+      ];
+      const badge = { online: "ok", offline: "error", unknown: "empty" }[
+        summary.status
+      ];
+      const card = document.createElement("article");
+      card.className = "panel receiver-card";
+      card.dataset.status = summary.status;
+      card.innerHTML = `<div class="device-identity"><span class="device-symbol">${icon("signal")}</span><div><h3>${e(receiverLabel(r.device_id))}</h3><p class="muted">${e(t("receivers.transmitters", { count: transmitters }))}</p></div><span class="badge" data-state="${badge}">${e(t(`receivers.${summary.status}`))}</span></div>${summary.notices.length ? `<ul class="receiver-notices">${summary.notices.map((n) => `<li data-level="${n.level}">${n.level === "info" ? "" : icon("alert")}<span>${e(n.text)}</span></li>`).join("")}</ul>` : ""}<dl class="detail-list receiver-details">${rows.map(([k, v]) => `<div><dt>${e(k)}</dt><dd>${e(v)}</dd></div>`).join("")}</dl>`;
+      target.querySelector(".receiver-items").append(card);
+    }
   }
   function matchingGroups() {
     const search = query.trim().toLowerCase();
@@ -103,7 +200,7 @@ export function mountDashboard(root, { state = {}, notify }) {
         card.className = "panel dashboard-item";
         if (item.kind === "device") {
           card.classList.add("transmitter-card");
-          card.innerHTML = `<div class="device-identity"><span class="device-symbol">${icon("device")}</span><div><h3>${e(g.name)}</h3><p class="muted">${e(t("counts.registered", { count: g.sensors.length }))}${g.location ? ` · ${e(g.location)}` : ""}</p></div></div><p class="device-last-report">${e(t("dashboard.last_report", { age: age(g.at, Date.parse(snapshot.generated_at)) }))}</p><div class="transmitter-footer"><cj-badge state="${deviceStatus(g)}"></cj-badge><button class="text-button" data-details aria-label="${e(t("dashboard.details_for", { name: g.name }))}">${t("dashboard.details_short")}${icon("arrow")}</button></div>`;
+          card.innerHTML = `<div class="device-identity"><span class="device-symbol">${icon("device")}</span><div><h3>${e(g.name)}</h3><p class="muted">${e(t("counts.registered", { count: g.sensors.length }))}${g.location ? ` · ${e(g.location)}` : ""}</p></div></div><p class="device-last-report">${e(t("dashboard.last_report", { age: age(g.at, Date.parse(snapshot.generated_at)) }))}</p>${g.receiverOffline ? `<p class="device-alert">${icon("alert")}<span>${e(t("receivers.receiver_offline"))}</span></p>` : ""}<div class="transmitter-footer"><cj-badge state="${deviceStatus(g)}"></cj-badge><button class="text-button" data-details aria-label="${e(t("dashboard.details_for", { name: g.name }))}">${t("dashboard.details_short")}${icon("arrow")}</button></div>`;
           card
             .querySelector("[data-details]")
             .addEventListener("click", () => showDevice(g));
@@ -210,6 +307,24 @@ export function mountDashboard(root, { state = {}, notify }) {
       ],
       [t("dashboard.registered_sensors"), g.sensors.length],
       [t("dashboard.arrival_status"), states[deviceStatus(g)]],
+      ...(g.state
+        ? [
+            [
+              t("receivers.binding"),
+              known(
+                `receivers.binding_${g.state.binding}`,
+                t("common.unknown"),
+              ),
+            ],
+            [
+              t("receivers.receiver"),
+              g.receiver
+                ? `${receiverLabel(g.receiver.device_id)} · ${t(`receivers.${receiverSummary(g.receiver).status}`)}`
+                : receiverLabel(g.state.receiver_id),
+            ],
+            [t("receivers.last_frame"), linkText(g.state.last_frame)],
+          ]
+        : []),
       ...g.diagnostics.map((c) => [
         c.title,
         `${formatValue(["ok", "recorded", "stale"].includes(c.state) ? c.value : null)} ${formatUnit(c.unit)} · ${states[c.state]}`,
@@ -249,7 +364,9 @@ export function mountDashboard(root, { state = {}, notify }) {
       (n, g) => n + g.sensors.reduce((sum, s) => sum + s.channels.length, 0),
       0,
     );
-    const issues = groups.filter((g) => g.attention).length;
+    const issues =
+      groups.filter((g) => g.attention).length +
+      receivers().filter((r) => r.availability === "offline").length;
     root.querySelector("#summary").innerHTML =
       `<p>${t("counts.devices", { count: groups.length })}<span aria-hidden="true"> / </span>${t("counts.sensors", { count: sensorCount })}<span aria-hidden="true"> / </span>${t("counts.measurements", { count: measurements })}</p>${issues ? `<span class="workspace-attention">${icon("alert")}${t("counts.issues", { count: issues })}</span>` : `<span class="muted">${groups.length ? t("dashboard.no_issues") : t("common.waiting")}</span>`}`;
     root.querySelector("#metric-select").innerHTML = channels
@@ -259,6 +376,7 @@ export function mountDashboard(root, { state = {}, notify }) {
       )
       .join("");
     root.querySelector("#metric-select").value = selected;
+    renderReceivers();
     renderGroups();
     renderChart();
     root.querySelector("#snapshot-time").textContent = t("dashboard.updated", {

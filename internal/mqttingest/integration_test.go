@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/storage"
 	"github.com/cajui/cajui-central/internal/telemetry"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -165,6 +166,70 @@ func TestBrokerIntegration(t *testing.T) {
 	cancel, done = start()
 	eventually(t, func() bool { return count() == 7 })
 
+}
+
+// Retained device state published before Central connects is ingested on subscription,
+// and a repeated snapshot does not refresh its receipt time.
+func TestBrokerDeviceStateIntegration(t *testing.T) {
+	url := os.Getenv("CAJUI_TEST_MQTT_URL")
+	if url == "" {
+		t.Skip("set CAJUI_TEST_MQTT_URL for real broker integration")
+	}
+	secrets := os.Getenv("CAJUI_TEST_SECRETS")
+	secret := func(name string) string {
+		b, e := os.ReadFile(filepath.Join(secrets, name))
+		if e != nil {
+			t.Fatal(e)
+		}
+		return strings.TrimSpace(string(b))
+	}
+	db, e := storage.Open(filepath.Join(t.TempDir(), "db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	publisher := mqtt.NewClient(mqtt.NewClientOptions().AddBroker(url).SetClientID("integration-state-publisher").SetUsername("demo-source").SetPassword(secret("demo-source")))
+	await := func(token mqtt.Token) {
+		t.Helper()
+		if !token.WaitTimeout(5*time.Second) || token.Error() != nil {
+			t.Fatalf("MQTT operation failed: %v", token.Error())
+		}
+	}
+	await(publisher.Connect())
+	defer publisher.Disconnect(0)
+	state, e := os.ReadFile("../../examples/mqtt/receiver-state.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	stateTopic := devicestate.Topic("demo-source", "00000000000000d1", "state")
+	availabilityTopic := devicestate.Topic("demo-source", "00000000000000d1", "availability")
+	await(publisher.Publish(availabilityTopic, 1, true, "online"))
+	await(publisher.Publish(stateTopic, 1, true, state))
+	defer func() {
+		await(publisher.Publish(stateTopic, 1, true, []byte{}))
+		await(publisher.Publish(availabilityTopic, 1, true, []byte{}))
+	}()
+	run := func() {
+		c := New(Config{URL: url, Username: "central", Password: secret("central"), ClientID: fmt.Sprintf("integration-state-%d", time.Now().UnixNano())}, db, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { defer close(done); c.Run(ctx) }()
+		defer func() { cancel(); <-done }()
+		eventually(t, func() bool {
+			states, err := db.DeviceStates(context.Background())
+			return err == nil && len(states) == 1 && states[0].Availability != nil
+		})
+	}
+	run()
+	first, e := db.DeviceStates(context.Background())
+	if e != nil || first[0].Role != "receiver" || !first[0].Retained || *first[0].Availability != "online" {
+		t.Fatal(first, e)
+	}
+	run() // A new session receives the same snapshot again.
+	second, e := db.DeviceStates(context.Background())
+	if e != nil || !second[0].ReceivedAt.Equal(first[0].ReceivedAt) || !second[0].AvailabilityAt.Equal(*first[0].AvailabilityAt) {
+		t.Fatal("repeated snapshot refreshed the receipt time")
+	}
 }
 func eventually(t *testing.T, condition func() bool) {
 	t.Helper()

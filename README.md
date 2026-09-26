@@ -1,8 +1,10 @@
 # Cajuí Central
 
 Local server for sensor readings: an HTTP API and MQTT consumer receive them, SQLite stores them and
-an embedded web page shows the latest ones. Hardware-agnostic. Early stage: no
-actuator control yet.
+an embedded web page shows the latest ones. It is designed for devices running
+[cajui-firmware](https://github.com/cajui/cajui-firmware), whose device state it also shows
+([ADR 0001](docs/adr/0001-first-party-devices.md)); the telemetry contract stays open to
+other producers. Early stage: no actuator control yet.
 
 ## Running
 
@@ -102,6 +104,7 @@ All `/api` routes require `Authorization: Bearer <CAJUI_API_TOKEN>`.
 - `GET /healthz`: 200 when the database is reachable, 503 otherwise.
 - `GET /`, `/devices`, `/sensors`: local workspace pages (no login, loopback hosts only).
 - `GET /api/v1/readings`: JSON list, most recently received first.
+- `GET /api/v1/device-states`: latest [device state](#device-state) per device.
 - `POST /api/v1/readings`: one JSON object, `Content-Type: application/json`.
 
 Fields: `node_id`, `sensor_id`, `session_id` and `metric` are 1–64 characters
@@ -128,8 +131,9 @@ silence detection, automations, user authentication or remote device provisionin
 ## MQTT
 
 The Compose stack runs Mosquitto with authentication and per-user ACLs. Central and the
-`homeassistant` account can only read samples; the `demo-source` account can only write
-under `telemetry/v1/demo-source/`; each producer can only write under its own namespace.
+`homeassistant` account can only read samples and device state; the `demo-source` account
+can only write under its own namespaces; each producer can only write under its own
+namespaces.
 Never share an unrestricted broker account across devices. `docker compose run --rm demo`
 publishes the simulated [`sample.json`](examples/mqtt/sample.json); repeating it is
 deduplicated. Do not put real credentials or measurements in example files.
@@ -206,6 +210,24 @@ Authenticated `GET /api/v1/samples` returns the latest 100 sample envelopes with
 with `last_received_at`, `expected_interval_seconds`, `stale`, and `sensor_error`.
 The workspace scopes MQTT and HTTP identities separately and lets users place their
 registered sensors together on a dashboard.
+
+### Device state
+
+Central also subscribes to the retained `manage/v1/+/+/state` and
+`manage/v1/+/+/availability` topics of the
+[cajui-firmware management channel](https://github.com/cajui/cajui-firmware/blob/main/docs/management-v1.md):
+receiver firmware, uptime, Wi-Fi signal, queue, forwarding counts, last restart and pairing
+window, and each transmitter's pairing and last radio frame. It keeps only the latest state
+and availability per device, validates known fields, ignores unknown ones and keeps absent
+values unknown. The broker repeats retained messages on every subscription: an identical
+snapshot keeps its original receipt time, and a changed one is marked as of unknown age
+until a live message replaces it. State is not telemetry and never enters sample history.
+Central has no write access to these topics and sends no commands.
+
+The generated ACL lets each producer write `manage/v1/<source_id>/+/availability`,
+`.../state` and `.../results` and read `.../commands`; Central and `homeassistant` read
+state and availability. On another broker, grant the same topics before updating
+receivers.
 
 ### Connecting an existing broker
 

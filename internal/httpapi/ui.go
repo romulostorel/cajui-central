@@ -7,6 +7,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/telemetry"
 	"github.com/cajui/cajui-central/internal/workspace"
 )
@@ -17,13 +18,15 @@ import (
 var uiFiles embed.FS
 
 type dashboardState struct {
-	Locale      string                   `json:"locale"`
-	Workspace   *workspace.Catalog       `json:"workspace,omitempty"`
-	UIToken     string                   `json:"ui_token,omitempty"`
-	Readings    []telemetry.Reading      `json:"readings"`
-	Samples     []telemetry.StoredSample `json:"samples"`
-	Devices     []telemetry.Device       `json:"devices"`
-	GeneratedAt time.Time                `json:"generated_at"`
+	Locale    string                   `json:"locale"`
+	Workspace *workspace.Catalog       `json:"workspace,omitempty"`
+	UIToken   string                   `json:"ui_token,omitempty"`
+	Readings  []telemetry.Reading      `json:"readings"`
+	Samples   []telemetry.StoredSample `json:"samples"`
+	Devices   []telemetry.Device       `json:"devices"`
+	// Latest management state of cajui-firmware devices (cajui-firmware docs/management-v1.md).
+	DeviceStates []devicestate.Stored `json:"device_states"`
+	GeneratedAt  time.Time            `json:"generated_at"`
 }
 type dashboardPage struct {
 	Title string

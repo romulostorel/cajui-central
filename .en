@@ -1,0 +1,5 @@
+# Docker Compose reads this file when it is named .env (ignored by Git).
+# Generate the token with: openssl rand -hex 32
+CAJUI_API_TOKEN=
+# Host port, bound on 127.0.0.1 only (default 8080).
+# CAJUI_PORT=8080
