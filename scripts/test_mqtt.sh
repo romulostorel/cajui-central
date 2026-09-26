@@ -60,6 +60,11 @@ publish_as homeassistant homeassistant "manage/v1/$producer/device/commands" | g
   || { echo 'Read-only account could publish a command'; exit 1; }
 publish_as "$producer" "producers/$producer" "manage/v1/$producer/device/results" | grep -q 'Not authorized' \
   && { echo 'Producer could not publish a result'; exit 1; }
+# Home Assistant Discovery: a producer writes configurations only under its own node level.
+publish_as "$producer" "producers/$producer" "homeassistant/sensor/$producer/device_temperature/config" | grep -q 'Not authorized' \
+  && { echo 'Producer could not publish its discovery configuration'; exit 1; }
+publish_as "$producer" "producers/$producer" homeassistant/sensor/demo-source/device_temperature/config | grep -q 'Not authorized' \
+  || { echo 'Producer could publish another source discovery configuration'; exit 1; }
 # Imported and removed credentials take effect without restarting the broker.
 printf 'imported-secret-123\n' | compose run --rm -T credentials import imported-producer > /dev/null
 imported() {

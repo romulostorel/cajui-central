@@ -291,6 +291,13 @@ PUBACK while the broker drops the sample; the integration test checks the ACL wi
 
 ### Home Assistant, without Central
 
+Receivers running cajui-firmware announce themselves and their transmitters through
+[MQTT Discovery](https://github.com/cajui/cajui-firmware/blob/main/docs/home-assistant.md):
+configure the Home Assistant MQTT integration with the `homeassistant` account and the
+entities appear. The generated ACL lets each producer write
+`homeassistant/+/<source_id>/+/config` and the `homeassistant` account read
+`homeassistant/#`. The manual configuration below is for producers without Discovery.
+
 Use the same broker and its read-only `homeassistant` account. Configure the
 [MQTT integration](https://www.home-assistant.io/integrations/mqtt/) in Home Assistant,
 then merge [`home-assistant.yaml`](examples/mqtt/home-assistant.yaml) into its
@@ -300,7 +307,7 @@ expiration to your devices. The example defines temperature and humidity, extrac
 values by sensor/metric rather than array position, and marks error/skipped readings
 unavailable. It uses the standard [MQTT Sensor configuration](https://www.home-assistant.io/integrations/sensor.mqtt/).
 
-This is manual configuration, **not automatic discovery**. Home Assistant subscribes
+This example is manual configuration, not automatic discovery. Home Assistant subscribes
 directly; Central can be stopped or absent. `expire_after` is configured explicitly
 (900 seconds for the example's 300-second interval). Unlike Central's sample
 identity deduplication, Home Assistant's example evaluates each message, so retries
