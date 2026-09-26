@@ -28,6 +28,8 @@ type Repository interface {
 	InsertSample(context.Context, telemetry.Sample, time.Time) (bool, error)
 	SaveDeviceState(context.Context, devicestate.State, time.Time, bool) error
 	SaveAvailability(context.Context, string, string, string, time.Time, bool) error
+	DeleteDeviceState(context.Context, string, string) error
+	DeleteAvailability(context.Context, string, string) error
 }
 type Config struct {
 	URL, ClientID, Username, Password string
@@ -52,6 +54,13 @@ func (c *Consumer) Connected() bool { return c.connected.Load() }
 // state and availability are retained by design and are always handled.
 func (c *Consumer) Handle(ctx context.Context, topic string, payload []byte, retained bool) (bool, error) {
 	if source, device, kind, ok := devicestate.ParseTopic(topic); ok {
+		// An empty message clears a retained topic: the device is gone.
+		if len(payload) == 0 && kind == "availability" {
+			return true, c.repo.DeleteAvailability(ctx, source, device)
+		}
+		if len(payload) == 0 {
+			return true, c.repo.DeleteDeviceState(ctx, source, device)
+		}
 		if kind == "availability" {
 			value, err := devicestate.DecodeAvailability(payload)
 			if err != nil {

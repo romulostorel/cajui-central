@@ -117,10 +117,15 @@ export function mountDashboard(root, { state = {}, notify }) {
         [
           t("receivers.forwarded"),
           typeof r.forwarding?.published === "number"
-            ? t("receivers.forwarded_value", {
+            ? t("receivers.readings", {
                 count: r.forwarding.published,
-                retries: r.forwarding.retries ?? 0,
               })
+            : t("common.unknown"),
+        ],
+        [
+          t("receivers.retries"),
+          typeof r.forwarding?.retries === "number"
+            ? formatValue(r.forwarding.retries, 0)
             : t("common.unknown"),
         ],
         [
@@ -134,7 +139,10 @@ export function mountDashboard(root, { state = {}, notify }) {
         ],
         [
           t("receivers.availability_changed"),
-          r.availability_at ? age(r.availability_at, now) : t("common.unknown"),
+          // A retained snapshot's time is when Central connected, not when it changed.
+          r.availability_at && !r.availability_retained
+            ? age(r.availability_at, now)
+            : t("common.unknown"),
         ],
       ];
       const badge = { online: "ok", offline: "error", unknown: "empty" }[

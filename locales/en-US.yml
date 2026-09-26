@@ -283,10 +283,11 @@ en-US:
     queue: Waiting to send
     queue_value: "%{depth} of %{capacity}"
     forwarded: Sent to broker
-    forwarded_value:
-      zero: "%{count} readings, no retries"
-      one: "%{count} reading, retries: %{retries}"
-      other: "%{count} readings, retries: %{retries}"
+    readings:
+      zero: "%{count} readings"
+      one: "%{count} reading"
+      other: "%{count} readings"
+    retries: Publish retries
     reset: Last restart
     transmitters:
       zero: No transmitters

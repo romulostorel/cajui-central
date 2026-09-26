@@ -95,10 +95,11 @@ type Parameters struct {
 // Retained marks a broker snapshot of unknown age that differed from what was stored.
 type Stored struct {
 	State
-	ReceivedAt     time.Time  `json:"received_at"`
-	Retained       bool       `json:"retained"`
-	Availability   *string    `json:"availability,omitempty"`
-	AvailabilityAt *time.Time `json:"availability_at,omitempty"`
+	ReceivedAt           time.Time  `json:"received_at"`
+	Retained             bool       `json:"retained"`
+	Availability         *string    `json:"availability,omitempty"`
+	AvailabilityAt       *time.Time `json:"availability_at,omitempty"`
+	AvailabilityRetained bool       `json:"availability_retained,omitempty"`
 }
 
 // Topic is the management topic of one device (kind "state" or "availability").

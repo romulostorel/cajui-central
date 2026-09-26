@@ -14,14 +14,22 @@ import (
 )
 
 type repository struct {
-	calls, states, availability int
-	retained                    bool
-	err                         error
+	calls, states, availability, deleted int
+	retained                             bool
+	err                                  error
 }
 
 func (r *repository) SaveDeviceState(_ context.Context, _ devicestate.State, _ time.Time, retained bool) error {
 	r.states++
 	r.retained = retained
+	return r.err
+}
+func (r *repository) DeleteDeviceState(context.Context, string, string) error {
+	r.deleted++
+	return r.err
+}
+func (r *repository) DeleteAvailability(context.Context, string, string) error {
+	r.deleted++
 	return r.err
 }
 func (r *repository) SaveAvailability(_ context.Context, _, _, _ string, _ time.Time, retained bool) error {
@@ -90,6 +98,15 @@ func TestHandleDeviceStateAndAvailability(t *testing.T) {
 		}
 	}
 	if repo.calls != 0 || repo.states != 1 || repo.availability != 1 {
+		t.Fatal(repo)
+	}
+	// Clearing a retained topic removes the device; the message is settled.
+	for _, topic := range []string{state, availability} {
+		if ok, e := c.Handle(context.Background(), topic, nil, false); !ok || e != nil {
+			t.Fatal(topic, ok, e)
+		}
+	}
+	if repo.deleted != 2 || repo.states != 1 || repo.availability != 1 {
 		t.Fatal(repo)
 	}
 	repo.err = errors.New("storage failed")

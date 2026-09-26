@@ -90,8 +90,53 @@ func TestDeviceStatesKeepTheLatestAndIgnoreRepeatedSnapshots(t *testing.T) {
 	if err = db.SaveDeviceState(ctx, receiver, later.Add(time.Minute), false); err != nil {
 		t.Fatal(err)
 	}
-	if states, _ = db.DeviceStates(ctx); states[0].Retained {
+	if states, _ = db.DeviceStates(ctx); states[0].Retained || states[0].AvailabilityRetained {
 		t.Fatal("live state still marked retained")
+	}
+	// A changed retained availability is of unknown age.
+	if err = db.SaveAvailability(ctx, "demo-source", "00000000000000d1", "online", later, true); err != nil {
+		t.Fatal(err)
+	}
+	if states, _ = db.DeviceStates(ctx); !states[0].AvailabilityRetained || *states[0].Availability != "online" {
+		t.Fatalf("%+v", states[0])
+	}
+	// Clearing the retained topics removes the device.
+	if err = db.DeleteDeviceState(ctx, "demo-source", "00000000000000d2"); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.DeleteAvailability(ctx, "demo-source", "00000000000000d1"); err != nil {
+		t.Fatal(err)
+	}
+	if states, _ = db.DeviceStates(ctx); len(states) != 1 || states[0].Availability != nil {
+		t.Fatalf("%+v", states)
+	}
+}
+
+func TestAMovedDeviceIsListedOnceUnderItsNewestSource(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(filepath.Join(t.TempDir(), "db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	at := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	for i, source := range []string{"old-user", "new-user", "same-time"} {
+		payload := `{"version":1,"source_id":"` + source + `","device_id":"00000000000000d1","role":"receiver"}`
+		state, err := devicestate.Decode(source, "00000000000000d1", []byte(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		stamp := at.Add(time.Duration(i) * time.Hour)
+		if source == "same-time" {
+			stamp = at.Add(time.Hour) // Ties resolve deterministically.
+		}
+		if err = db.SaveDeviceState(ctx, state, stamp, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	states, err := db.DeviceStates(ctx)
+	if err != nil || len(states) != 1 || states[0].SourceID != "same-time" {
+		t.Fatal(states, err)
 	}
 }
 
@@ -117,7 +162,7 @@ func TestDeviceStateStorageFailures(t *testing.T) {
 	if _, err = db.DeviceStates(ctx); err == nil {
 		t.Fatal("bad state accepted")
 	}
-	if _, err = db.db.Exec(`UPDATE device_states SET state='{}'; INSERT INTO device_availability VALUES('demo-source','00000000000000d1','online','bad')`); err != nil {
+	if _, err = db.db.Exec(`UPDATE device_states SET state='{}'; INSERT INTO device_availability VALUES('demo-source','00000000000000d1','online','bad',0)`); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.DeviceStates(ctx); err == nil {
@@ -129,5 +174,8 @@ func TestDeviceStateStorageFailures(t *testing.T) {
 	}
 	if _, err = db.DeviceStates(ctx); err == nil {
 		t.Fatal("closed database listed states")
+	}
+	if err = db.DeleteDeviceState(ctx, "s", "d"); err == nil {
+		t.Fatal("closed database deleted a state")
 	}
 }

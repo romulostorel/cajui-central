@@ -287,10 +287,11 @@ pt-BR:
     queue: Aguardando envio
     queue_value: "%{depth} de %{capacity}"
     forwarded: Enviadas ao broker
-    forwarded_value:
-      zero: "%{count} leituras, sem novas tentativas"
-      one: "%{count} leitura, novas tentativas: %{retries}"
-      other: "%{count} leituras, novas tentativas: %{retries}"
+    readings:
+      zero: "%{count} leituras"
+      one: "%{count} leitura"
+      other: "%{count} leituras"
+    retries: Novas tentativas de envio
     reset: Último reinício
     transmitters:
       zero: Nenhum transmissor

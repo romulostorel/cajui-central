@@ -221,7 +221,10 @@ window, and each transmitter's pairing and last radio frame. It keeps only the l
 and availability per device, validates known fields, ignores unknown ones and keeps absent
 values unknown. The broker repeats retained messages on every subscription: an identical
 snapshot keeps its original receipt time, and a changed one is marked as of unknown age
-until a live message replaces it. State is not telemetry and never enters sample history.
+until a live message replaces it. An empty message on either topic, which clears a
+retained topic, removes that state or availability. A device seen under several sources
+has moved; only its most recent state is listed. State is not telemetry and never enters
+sample history.
 Central has no write access to these topics and sends no commands.
 
 The generated ACL lets each producer write `manage/v1/<source_id>/+/availability`,
