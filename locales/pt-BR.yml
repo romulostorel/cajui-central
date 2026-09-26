@@ -323,3 +323,37 @@ pt-BR:
       deep_sleep: Despertar do sono
       external: Botão de reset
       other: Outro
+  commands:
+    request_name: Transmissor %{id}
+    search: Buscar transmissores
+    stop: Parar busca
+    add: Adicionar
+    revoke: Revogar transmissor
+    revoke_confirm: Revogar %{name}? Ele deixa de ser aceito até ser pareado de novo pelo botão.
+    requests: Pedindo para entrar
+    no_requests: Segure o botão PRG do transmissor por três segundos para ele pedir.
+    conflict: Dois aparelhos usaram este ID; busque de novo.
+    sending: Enviando ao receptor…
+    waiting_node: O receptor enviou a oferta; aguardando o transmissor confirmar.
+    undelivered: O receptor não respondeu. Verifique se ele está conectado e tente de novo.
+    applied:
+      pairing_open: Busca iniciada por dois minutos.
+      pairing_close: Busca encerrada.
+      pairing_accept: Transmissor pareado.
+      node_revoke: Transmissor revogado.
+    reasons:
+      invalid: O receptor não entendeu o comando.
+      unsupported: Este firmware não permite essa ação.
+      busy: O receptor estava ocupado; tente de novo.
+      unknown_node: O receptor não conhece esse transmissor.
+      closed: A busca está encerrada; comece uma nova.
+      not_requested: Esse transmissor não está mais pedindo para entrar.
+      conflict: Dois aparelhos usaram este ID; busque de novo.
+      full: O receptor não tem vaga para outro transmissor.
+      superseded: Outra oferta substituiu esta.
+      storage: O receptor não conseguiu salvar a mudança.
+      failed: O receptor não conseguiu concluir a ação.
+    errors:
+      send: Não foi possível enviar o comando. Tente de novo.
+      offline: O Central não está conectado ao broker.
+      status: Não foi possível conferir a resposta. Atualize a página.

@@ -21,6 +21,7 @@ import {
   linkText,
 } from "../../internal/httpapi/ui/model.mjs";
 import { setLocale } from "../../internal/httpapi/ui/i18n.mjs";
+import { answerText } from "../../internal/httpapi/ui/command-api.mjs";
 import { demoData } from "../../docs/brand/demo.mjs";
 
 test("missing, zero and failures remain distinct", () => {
@@ -540,6 +541,37 @@ test("receiver state keeps unknown values unknown and names actionable notices",
   assert.match(
     receiverSummary({ availability: "offline" }).notices[0].text,
     /Wi-Fi do receptor/,
+  );
+  setLocale("en-US");
+});
+
+test("command answers read as plain actions and reasons", () => {
+  setLocale("en-US");
+  assert.equal(
+    answerText({ status: "applied", type: "pairing.open" }),
+    "Search started for two minutes.",
+  );
+  assert.equal(
+    answerText({ status: "applied", type: "node.revoke" }),
+    "Transmitter revoked.",
+  );
+  assert.equal(
+    answerText({ status: "rejected", reason: "not_requested" }),
+    "That transmitter is no longer asking to join.",
+  );
+  assert.equal(
+    answerText({ status: "rejected", reason: "something_new" }),
+    "The receiver could not complete the action.",
+  );
+  assert.equal(
+    answerText({ status: "rejected" }),
+    "The receiver could not complete the action.",
+  );
+  assert.match(answerText({ status: "undelivered" }), /did not answer/);
+  setLocale("pt-BR");
+  assert.equal(
+    answerText({ status: "applied", type: "pairing.accept" }),
+    "Transmissor pareado.",
   );
   setLocale("en-US");
 });

@@ -34,14 +34,20 @@ func (s *server) localPage(next http.HandlerFunc) http.HandlerFunc {
 		next(w, r)
 	}
 }
-func (s *server) editWorkspace(w http.ResponseWriter, r *http.Request) {
+
+// trustedLocalWrite accepts a same-origin request from the local page that carries the
+// process-scoped capability; anything else could be another site forging it (CSRF).
+func (s *server) trustedLocalWrite(r *http.Request) bool {
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	if !localHost(r.Host) || r.Header.Get("Origin") != scheme+"://"+r.Host ||
-		subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Cajui-Workspace")), []byte(s.uiToken)) != 1 ||
-		(r.Header.Get("Sec-Fetch-Site") != "" && r.Header.Get("Sec-Fetch-Site") != "same-origin") {
+	return localHost(r.Host) && r.Header.Get("Origin") == scheme+"://"+r.Host &&
+		subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Cajui-Workspace")), []byte(s.uiToken)) == 1 &&
+		(r.Header.Get("Sec-Fetch-Site") == "" || r.Header.Get("Sec-Fetch-Site") == "same-origin")
+}
+func (s *server) editWorkspace(w http.ResponseWriter, r *http.Request) {
+	if !s.trustedLocalWrite(r) {
 		http.Error(w, "reload the local page before editing", http.StatusForbidden)
 		return
 	}

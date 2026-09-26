@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/cajui/cajui-central/internal/devicestate"
@@ -101,4 +102,19 @@ func (s *Store) DeviceStates(ctx context.Context) ([]devicestate.Stored, error) 
 		result = append(result, item)
 	}
 	return result, rows.Err()
+}
+
+// DeviceState returns the stored state of one device.
+func (s *Store) DeviceState(ctx context.Context, source, device string) (devicestate.State, error) {
+	var payload string
+	var state devicestate.State
+	err := s.db.QueryRowContext(ctx, `SELECT state FROM device_states WHERE source_id=? AND device_id=?`, source, device).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) {
+		return state, devicestate.ErrUnknownDevice
+	}
+	if err != nil {
+		return state, err
+	}
+	err = json.Unmarshal([]byte(payload), &state)
+	return state, err
 }
