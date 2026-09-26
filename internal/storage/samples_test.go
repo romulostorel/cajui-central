@@ -142,7 +142,7 @@ func TestMigrationPreservesVersionOne(t *testing.T) {
 	if _, e = db.Insert(context.Background(), r, time.Now()); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = db.db.Exec(`DROP TABLE workspace_measurements; DROP TABLE workspace_sensors; DROP TABLE workspace_devices; DROP TABLE workspace_layout; DROP TABLE samples; PRAGMA user_version=1`); e != nil {
+	if _, e = db.db.Exec(`DROP TABLE workspace_measurements; DROP TABLE workspace_sensors; DROP TABLE workspace_devices; DROP TABLE workspace_layout; DROP TABLE samples; DROP TABLE device_states; DROP TABLE device_availability; PRAGMA user_version=1`); e != nil {
 		t.Fatal(e)
 	}
 	db.Close()

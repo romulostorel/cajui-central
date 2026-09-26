@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/telemetry"
 	"github.com/cajui/cajui-central/internal/workspace"
 )
@@ -30,6 +31,7 @@ type Repository interface {
 	Ping(context.Context) error
 	RecentSamples(context.Context, int) ([]telemetry.StoredSample, error)
 	Devices(context.Context, time.Time) ([]telemetry.Device, error)
+	DeviceStates(context.Context) ([]devicestate.Stored, error)
 }
 
 //go:embed index.html
@@ -62,6 +64,7 @@ func New(repo Repository, token string, logger *slog.Logger) (http.Handler, erro
 	mux.Handle("GET /api/v1/readings", s.authorize(http.HandlerFunc(s.list)))
 	mux.Handle("GET /api/v1/samples", s.authorize(http.HandlerFunc(s.samples)))
 	mux.Handle("GET /api/v1/devices", s.authorize(http.HandlerFunc(s.devices)))
+	mux.Handle("GET /api/v1/device-states", s.authorize(http.HandlerFunc(s.deviceStates)))
 	mux.Handle("POST /api/v1/readings", s.authorize(http.HandlerFunc(s.ingest)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -129,6 +132,11 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
+	states, err := s.repo.DeviceStates(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
 	language := requestLocale(w, r)
 	w.Header().Set("Content-Language", language)
 	w.Header().Add("Vary", "Accept-Language")
@@ -140,7 +148,7 @@ func (s *server) index(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/sensors" {
 		title = "common.sensors"
 	}
-	if err = dashboard.Execute(w, dashboardPage{Title: catalogs[language][title], Route: r.URL.Path, State: dashboardState{Locale: language, Readings: readings, Samples: samples, Devices: devices, Workspace: &catalog, UIToken: s.uiToken, GeneratedAt: time.Now().UTC()}}); err != nil {
+	if err = dashboard.Execute(w, dashboardPage{Title: catalogs[language][title], Route: r.URL.Path, State: dashboardState{Locale: language, Readings: readings, Samples: samples, Devices: devices, DeviceStates: states, Workspace: &catalog, UIToken: s.uiToken, GeneratedAt: time.Now().UTC()}}); err != nil {
 		s.logger.Error("render dashboard", "error", err)
 	}
 }
@@ -217,4 +225,13 @@ func (s *server) devices(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(devices)
+}
+func (s *server) deviceStates(w http.ResponseWriter, r *http.Request) {
+	states, err := s.repo.DeviceStates(r.Context())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(states)
 }

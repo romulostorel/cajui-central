@@ -268,3 +268,58 @@ pt-BR:
       one: '%{count} segundo'
       other: '%{count} segundos'
       zero: '%{count} segundos'
+  receivers:
+    heading: Receptores
+    name: Receptor %{id}
+    online: Conectado
+    offline: Sem conexão
+    unknown: Conexão não informada
+    firmware: Firmware
+    firmware_pending: "%{version}, aguardando confirmação"
+    local_build: Compilação local
+    uptime: Tempo ligado
+    duration:
+      minutes: '%{count} min'
+      hours: '%{count} h'
+      days: '%{count} d'
+    availability_changed: Última mudança de conexão
+    wifi: Sinal do Wi-Fi
+    queue: Aguardando envio
+    queue_value: "%{depth} de %{capacity}"
+    forwarded: Enviadas ao broker
+    readings:
+      zero: "%{count} leituras"
+      one: "%{count} leitura"
+      other: "%{count} leituras"
+    retries: Novas tentativas de envio
+    reset: Último reinício
+    transmitters:
+      zero: Nenhum transmissor
+      one: "%{count} transmissor"
+      other: "%{count} transmissores"
+    offline_notice: Sem conexão. Verifique a energia e o Wi-Fi do receptor.
+    queue_notice:
+      one: "%{count} leitura aguarda envio ao broker."
+      other: "%{count} leituras aguardam envio ao broker."
+    pairing_notice:
+      zero: Pareamento aberto; nenhum transmissor pediu para entrar ainda.
+      one: Pareamento aberto; %{count} transmissor pediu para entrar.
+      other: Pareamento aberto; %{count} transmissores pediram para entrar.
+    pending_notice: Uma atualização de firmware está em teste e será confirmada após um minuto de funcionamento normal.
+    retained_notice: Estado recebido do broker quando o Central se conectou; a idade é desconhecida.
+    binding: Pareamento
+    binding_active: Pareado
+    binding_pending: Cadastrado, ainda não ativo
+    binding_revoked: Revogado
+    receiver: Receptor
+    last_frame: Último quadro de rádio
+    receiver_offline: O receptor dele está sem conexão
+    reset_reasons:
+      power_on: Ligado na energia
+      software: Reinício pelo software
+      panic: Falha
+      watchdog: Watchdog
+      brownout: Tensão baixa
+      deep_sleep: Despertar do sono
+      external: Botão de reset
+      other: Outro

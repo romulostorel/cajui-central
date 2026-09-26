@@ -13,7 +13,14 @@ import {
   contrast,
   buildDeviceGroups,
   isLinkDiagnostic,
+  receiverLabel,
+  deviceStateFor,
+  firmwareText,
+  uptimeText,
+  receiverSummary,
+  linkText,
 } from "../../internal/httpapi/ui/model.mjs";
+import { setLocale } from "../../internal/httpapi/ui/i18n.mjs";
 import { demoData } from "../../docs/brand/demo.mjs";
 
 test("missing, zero and failures remain distinct", () => {
@@ -471,4 +478,68 @@ test("layout references registrations and excludes diagnostics", () => {
     "Renamed",
   );
   assert.equal(catalog.layout.sections, null);
+});
+
+test("receiver state keeps unknown values unknown and names actionable notices", () => {
+  setLocale("en-US");
+  assert.equal(receiverLabel("000048ca433c5e10"), "Receiver 5E10");
+  const states = [
+    { source_id: "r", device_id: "a", role: "receiver" },
+    { source_id: "r", device_id: "b", role: "transmitter" },
+  ];
+  assert.equal(deviceStateFor(states, "r", "b").role, "transmitter");
+  assert.equal(deviceStateFor(states, "other", "b"), null);
+  assert.equal(deviceStateFor(undefined, "r", "b"), null);
+  assert.equal(firmwareText(undefined), "Unknown");
+  assert.equal(firmwareText({ version: "0.2.0", state: "valid" }), "0.2.0");
+  assert.equal(
+    firmwareText({ version: "0.0.0", state: "flashed" }),
+    "Local build",
+  );
+  assert.equal(
+    firmwareText({ version: "0.3.0", state: "pending" }),
+    "0.3.0, awaiting confirmation",
+  );
+  assert.equal(uptimeText(undefined), "Unknown");
+  assert.equal(uptimeText(0), "0 min");
+  assert.equal(uptimeText(7200), "2 h");
+  assert.equal(uptimeText(172800), "2 d");
+  assert.deepEqual(receiverSummary({}), { status: "unknown", notices: [] });
+  assert.deepEqual(
+    receiverSummary({ availability: "online", queue: { depth: 0 } }).notices,
+    [],
+  );
+  const busy = receiverSummary({
+    availability: "online",
+    queue: { depth: 3 },
+    pairing: { open: true, requests: [{}] },
+    firmware: { state: "pending" },
+    retained: true,
+  });
+  assert.equal(busy.status, "online");
+  assert.deepEqual(
+    busy.notices.map((n) => n.level),
+    ["warning", "info", "info", "info"],
+  );
+  assert.match(busy.notices[0].text, /3 readings are waiting/);
+  const offline = receiverSummary({
+    availability: "offline",
+    queue: { depth: 3 },
+  });
+  assert.equal(offline.status, "offline");
+  assert.deepEqual(
+    offline.notices.map((n) => n.level),
+    ["error"],
+  );
+  assert.equal(linkText(null), "Unknown");
+  assert.equal(linkText({ rssi_dbm: null }), "Unknown");
+  assert.equal(linkText({ rssi_dbm: -82, snr_db: 9.5 }), "-82 dBm · 9.5 dB");
+  assert.equal(linkText({ snr_db: -2 }), "-2 dB");
+  setLocale("pt-BR");
+  assert.equal(receiverLabel("000048ca433c5e10"), "Receptor 5E10");
+  assert.match(
+    receiverSummary({ availability: "offline" }).notices[0].text,
+    /Wi-Fi do receptor/,
+  );
+  setLocale("en-US");
 });

@@ -320,3 +320,77 @@ export function buildDeviceGroups(channels, reportedDevices = []) {
 export function measurementLabel(value) {
   return metricLabel(value, label(value));
 }
+
+// Management state of cajui-firmware devices (cajui-firmware docs/management-v1.md).
+// Missing values stay unknown; nothing here is inferred from a unit or a name.
+export function receiverLabel(deviceId) {
+  return t("receivers.name", {
+    id: String(deviceId ?? "")
+      .slice(-4)
+      .toUpperCase(),
+  });
+}
+export function deviceStateFor(states, source, device) {
+  return (
+    (states ?? []).find(
+      (s) => s.source_id === source && s.device_id === device,
+    ) ?? null
+  );
+}
+export function firmwareText(firmware) {
+  const version = firmware?.version;
+  if (!version) return t("common.unknown");
+  const text = version === "0.0.0" ? t("receivers.local_build") : version;
+  return firmware.state === "pending"
+    ? t("receivers.firmware_pending", { version: text })
+    : text;
+}
+export function uptimeText(seconds) {
+  if (numeric(seconds) === null) return t("common.unknown");
+  return seconds < 3600
+    ? t("receivers.duration.minutes", { count: Math.floor(seconds / 60) })
+    : seconds < 86400
+      ? t("receivers.duration.hours", { count: Math.floor(seconds / 3600) })
+      : t("receivers.duration.days", { count: Math.floor(seconds / 86400) });
+}
+// Status plus the notices an operator can act on, most urgent first.
+export function receiverSummary(state) {
+  const online = state.availability === "online";
+  const offline = state.availability === "offline";
+  const notices = [];
+  if (offline)
+    notices.push({ level: "error", text: t("receivers.offline_notice") });
+  const depth = numeric(state.queue?.depth);
+  if (online && depth)
+    notices.push({
+      level: "warning",
+      text: t("receivers.queue_notice", { count: depth }),
+    });
+  if (state.pairing?.open)
+    notices.push({
+      level: "info",
+      text: t("receivers.pairing_notice", {
+        count: state.pairing.requests?.length ?? 0,
+      }),
+    });
+  if (state.firmware?.state === "pending")
+    notices.push({ level: "info", text: t("receivers.pending_notice") });
+  if (state.retained)
+    notices.push({ level: "info", text: t("receivers.retained_notice") });
+  return {
+    status: online ? "online" : offline ? "offline" : "unknown",
+    notices,
+  };
+}
+export function linkText(frame) {
+  if (!frame) return t("common.unknown");
+  const rssi = numeric(frame.rssi_dbm),
+    snr = numeric(frame.snr_db);
+  if (rssi === null && snr === null) return t("common.unknown");
+  return [
+    rssi === null ? null : `${formatValue(rssi, 0)} dBm`,
+    snr === null ? null : `${formatValue(snr, 1)} dB`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}

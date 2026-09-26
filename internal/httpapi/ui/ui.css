@@ -1985,3 +1985,70 @@ cj-reading {
   gap: 8px;
   margin-left: auto;
 }
+
+/* Receivers: cajui-firmware management state (connection, queue, firmware). */
+.receiver-strip {
+  margin-top: var(--space-6);
+}
+.receiver-strip > h2 {
+  font-size: var(--text-label);
+  margin-bottom: var(--space-3);
+}
+.receiver-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: var(--space-3);
+}
+.receiver-card {
+  display: grid;
+  gap: var(--space-3);
+}
+.receiver-card .device-identity {
+  align-items: center;
+  gap: var(--space-3);
+}
+.receiver-card .device-identity .badge {
+  margin-left: auto;
+}
+.receiver-card h3 {
+  font-size: 20px;
+}
+.receiver-card .device-symbol {
+  width: 40px;
+  height: 40px;
+}
+.receiver-notices {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.receiver-notices li,
+.device-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--text-body);
+  overflow-wrap: anywhere;
+}
+.receiver-notices li[data-level="error"],
+.device-alert {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.receiver-notices li[data-level="warning"] {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.receiver-notices svg,
+.device-alert svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}

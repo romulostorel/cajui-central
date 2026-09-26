@@ -43,6 +43,16 @@ allowed() {
 eventually allowed allowed || { echo 'New producer was not accepted after reload'; exit 1; }
 publish_as "$producer" "producers/$producer" telemetry/v1/demo-source/device/samples | grep -q 'Not authorized' \
   || { echo 'Producer ACL rejection was not observed'; exit 1; }
+# The producer also owns its management topics (cajui-firmware docs/management-v1.md), and
+# only those; read-only accounts cannot publish state.
+publish_as "$producer" "producers/$producer" "manage/v1/$producer/device/state" | grep -q 'Not authorized' \
+  && { echo 'Producer management state was rejected'; exit 1; }
+publish_as "$producer" "producers/$producer" manage/v1/demo-source/device/state | grep -q 'Not authorized' \
+  || { echo 'Foreign management state was accepted'; exit 1; }
+publish_as "$producer" "producers/$producer" "manage/v1/$producer/device/commands" | grep -q 'Not authorized' \
+  || { echo 'Producer could publish its own commands'; exit 1; }
+publish_as central central "manage/v1/$producer/device/state" | grep -q 'Not authorized' \
+  || { echo 'Central could publish management state'; exit 1; }
 # Imported and removed credentials take effect without restarting the broker.
 printf 'imported-secret-123\n' | compose run --rm -T credentials import imported-producer > /dev/null
 imported() {
