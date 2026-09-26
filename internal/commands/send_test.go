@@ -74,6 +74,15 @@ func TestSendRecordsBeforePublishingAndReportsStatus(t *testing.T) {
 	if got, _ := Status(ctx, r, record.ID, now.Add(time.Hour)); got.Status != "applied" {
 		t.Fatal(got)
 	}
+	// A pending command whose receiver restarted never gets its final answer.
+	answered.Status, answered.UpdatedAt = "pending", now
+	r.records[record.ID] = answered
+	if got, _ := Status(ctx, r, record.ID, now.Add(devicestate.PendingTimeout-time.Second)); got.Status != "pending" {
+		t.Fatal(got)
+	}
+	if got, _ := Status(ctx, r, record.ID, now.Add(devicestate.PendingTimeout)); got.Status != "undelivered" {
+		t.Fatal(got)
+	}
 	if _, err := Status(ctx, r, "missing", now); !errors.Is(err, devicestate.ErrUnknownCommand) {
 		t.Fatal(err)
 	}
@@ -98,6 +107,11 @@ func TestSendFailures(t *testing.T) {
 	p := &publisher{}
 	if _, err := Send(ctx, r, p, "r", "d", "pairing.open", "", now); err == nil || len(p.sent) != 0 {
 		t.Fatal("published a command that was not recorded")
+	}
+	// A publication that timed out may still be delivered: its record stays, as sent.
+	r, p = newRepo(), &publisher{err: context.DeadlineExceeded}
+	if record, err := Send(ctx, r, p, "r", "d", "pairing.open", "", now); err != nil || record.Status != "sent" || len(r.records) != 1 {
+		t.Fatal(record, err)
 	}
 	// A command that could not be published leaves no record behind.
 	r, p = newRepo(), &publisher{err: ErrUnavailable}

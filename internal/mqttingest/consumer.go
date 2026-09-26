@@ -241,7 +241,11 @@ func (c *Consumer) PublishCommand(ctx context.Context, source, device string, co
 	if err != nil {
 		return err
 	}
-	return wait(ctx, client.Publish(devicestate.Topic(source, device, "commands"), 1, false, payload))
+	err = wait(ctx, client.Publish(devicestate.Topic(source, device, "commands"), 1, false, payload))
+	if errors.Is(err, mqtt.ErrNotConnected) {
+		return commands.ErrUnavailable // Refused before it entered the client's store.
+	}
+	return err
 }
 func drain(inbox chan message) {
 	for {

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -42,7 +43,8 @@ func (s *server) sendCommand(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid command", 400)
 		return
 	}
-	record, err := commands.Send(r.Context(), s.repo, s.publisher, input.SourceID, input.DeviceID, input.Type, input.NodeID, time.Now())
+	// A closed tab must not turn a command already handed to the broker into a failure.
+	record, err := commands.Send(context.WithoutCancel(r.Context()), s.repo, s.publisher, input.SourceID, input.DeviceID, input.Type, input.NodeID, time.Now())
 	switch {
 	case errors.Is(err, devicestate.ErrInvalid):
 		http.Error(w, "command not offered by this device", 400)

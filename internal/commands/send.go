@@ -44,7 +44,10 @@ func Send(ctx context.Context, repo Repository, publisher Publisher, source, dev
 	if err = repo.InsertCommand(ctx, source, device, command, now); err != nil {
 		return devicestate.CommandRecord{}, err
 	}
-	if err = publisher.PublishCommand(ctx, source, device, command); err != nil {
+	// Only a command the client never accepted is certainly not sent. After a timeout the
+	// client may still deliver it (QoS 1 retries on reconnection), so its record stays and
+	// the answer, or the timeout below, settles it.
+	if err = publisher.PublishCommand(ctx, source, device, command); errors.Is(err, ErrUnavailable) {
 		if deleteErr := repo.DeleteCommand(ctx, command.ID); deleteErr != nil {
 			return devicestate.CommandRecord{}, errors.Join(err, deleteErr)
 		}
@@ -60,7 +63,10 @@ func Status(ctx context.Context, repo Repository, id string, now time.Time) (dev
 	if err != nil {
 		return record, err
 	}
-	if record.Status == "sent" && now.Sub(record.SentAt) >= devicestate.CommandTimeout {
+	// A pending accept gets its final answer within the pairing window unless the receiver
+	// restarts first; then no answer ever comes.
+	if record.Status == "sent" && now.Sub(record.SentAt) >= devicestate.CommandTimeout ||
+		record.Status == "pending" && now.Sub(record.UpdatedAt) >= devicestate.PendingTimeout {
 		record.Status = "undelivered"
 	}
 	return record, nil

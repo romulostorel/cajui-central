@@ -333,6 +333,7 @@ pt-BR:
     requests: Pedindo para entrar
     no_requests: Segure o botão PRG do transmissor por três segundos para ele pedir.
     conflict: Dois aparelhos usaram este ID; busque de novo.
+    in_progress: Outro comando ainda está em andamento; aguarde a resposta.
     sending: Enviando ao receptor…
     waiting_node: O receptor enviou a oferta; aguardando o transmissor confirmar.
     undelivered: O receptor não respondeu. Verifique se ele está conectado e tente de novo.

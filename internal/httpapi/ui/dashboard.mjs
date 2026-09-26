@@ -208,7 +208,10 @@ export function mountDashboard(root, { state = {}, notify }) {
     return box;
   }
   async function runCommand(button, { source, device, type, node }) {
-    if (commandRunning) return;
+    if (commandRunning) {
+      notify(t("commands.in_progress"));
+      return;
+    }
     commandRunning = true;
     button.disabled = true;
     notify(t("commands.sending"));
@@ -449,6 +452,10 @@ export function mountDashboard(root, { state = {}, notify }) {
       revoke.className = "button danger";
       revoke.textContent = t("commands.revoke");
       revoke.addEventListener("click", () => {
+        if (commandRunning) {
+          notify(t("commands.in_progress"));
+          return;
+        }
         if (!window.confirm(t("commands.revoke_confirm", { name: g.name })))
           return;
         root.querySelector("#device-dialog").close();
@@ -579,6 +586,7 @@ export function mountDashboard(root, { state = {}, notify }) {
   const timer = setInterval(() => {
     if (
       !document.hidden &&
+      !commandRunning &&
       !root.contains(document.activeElement) &&
       !root.querySelector("dialog[open]")
     )
@@ -589,8 +597,11 @@ export function mountDashboard(root, { state = {}, notify }) {
     if (
       !document.hidden &&
       !commandRunning &&
+      !root.contains(document.activeElement) &&
       !root.querySelector("dialog[open]") &&
-      receivers().some((r) => r.pairing?.open)
+      receivers().some(
+        (r) => r.pairing?.open && receiverSummary(r).status === "online",
+      )
     )
       refresh();
   }, 3000);

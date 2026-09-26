@@ -127,3 +127,7 @@ type CommandRecord struct {
 // CommandTimeout bounds the wait for a receiver's first answer. A receiver answers within
 // seconds or not at all: it drops commands that waited more than 5 s.
 const CommandTimeout = 30 * time.Second
+
+// PendingTimeout bounds the wait for a pending command's final answer: the two-minute
+// pairing window plus a margin.
+const PendingTimeout = 3 * time.Minute

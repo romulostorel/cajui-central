@@ -329,6 +329,7 @@ en-US:
     requests: Asking to join
     no_requests: Hold the transmitter's PRG button for three seconds to make it ask.
     conflict: Two devices claimed this ID; search again.
+    in_progress: Another command is still running; wait for its answer.
     sending: Sending to the receiver…
     waiting_node: The receiver sent the offer; waiting for the transmitter to confirm.
     undelivered: The receiver did not answer. Check that it is online and try again.
