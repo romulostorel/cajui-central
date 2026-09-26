@@ -295,7 +295,7 @@ Receivers running cajui-firmware announce themselves and their transmitters thro
 [MQTT Discovery](https://github.com/cajui/cajui-firmware/blob/main/docs/home-assistant.md):
 configure the Home Assistant MQTT integration with the `homeassistant` account and the
 entities appear. The generated ACL lets each producer write
-`homeassistant/+/<source_id>/+/config` and the `homeassistant` account read
+`homeassistant/sensor/<source_id>/+/config` and the `homeassistant` account read
 `homeassistant/#`. The manual configuration below is for producers without Discovery.
 
 Use the same broker and its read-only `homeassistant` account. Configure the

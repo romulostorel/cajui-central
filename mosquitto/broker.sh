@@ -44,7 +44,7 @@ generate() {
       printf 'topic write manage/v1/%s/+/results\n' "$name"
       printf 'topic read manage/v1/%s/+/commands\n' "$name"
       # Home Assistant Discovery, confined to the producer's node level (docs/home-assistant.md).
-      printf 'topic write homeassistant/+/%s/+/config\n' "$name"
+      printf 'topic write homeassistant/sensor/%s/+/config\n' "$name"
     } >> "$auth/acl.tmp"
   done
   mosquitto_passwd -U "$auth/passwords.tmp"
