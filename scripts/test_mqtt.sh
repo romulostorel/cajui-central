@@ -53,6 +53,13 @@ publish_as "$producer" "producers/$producer" "manage/v1/$producer/device/command
   || { echo 'Producer could publish its own commands'; exit 1; }
 publish_as central central "manage/v1/$producer/device/state" | grep -q 'Not authorized' \
   || { echo 'Central could publish management state'; exit 1; }
+# Only Central sends commands; the read-only account cannot.
+publish_as central central "manage/v1/$producer/device/commands" | grep -q 'Not authorized' \
+  && { echo 'Central could not publish a command'; exit 1; }
+publish_as homeassistant homeassistant "manage/v1/$producer/device/commands" | grep -q 'Not authorized' \
+  || { echo 'Read-only account could publish a command'; exit 1; }
+publish_as "$producer" "producers/$producer" "manage/v1/$producer/device/results" | grep -q 'Not authorized' \
+  && { echo 'Producer could not publish a result'; exit 1; }
 # Imported and removed credentials take effect without restarting the broker.
 printf 'imported-secret-123\n' | compose run --rm -T credentials import imported-producer > /dev/null
 imported() {

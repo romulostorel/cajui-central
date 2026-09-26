@@ -42,7 +42,7 @@ func (s *Store) migrate() error {
 	if err = tx.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		return err
 	}
-	if version > 4 {
+	if version > 5 {
 		return fmt.Errorf("unsupported schema version %d", version)
 	}
 	if version == 0 {
@@ -77,6 +77,11 @@ func (s *Store) migrate() error {
 	}
 	if version < 4 {
 		if _, err = tx.Exec(deviceStateSchema); err != nil {
+			return err
+		}
+	}
+	if version < 5 {
+		if _, err = tx.Exec(commandSchema); err != nil {
 			return err
 		}
 	}

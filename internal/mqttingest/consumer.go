@@ -7,9 +7,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/cajui/cajui-central/internal/commands"
 	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/telemetry"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -19,10 +21,11 @@ const (
 	Topic             = "telemetry/v1/+/+/samples"
 	StateTopic        = "manage/v1/+/+/state"
 	AvailabilityTopic = "manage/v1/+/+/availability"
+	ResultsTopic      = "manage/v1/+/+/results"
 )
 
 // Topics Central subscribes to, all with QoS 1.
-var Topics = map[string]byte{Topic: 1, StateTopic: 1, AvailabilityTopic: 1}
+var Topics = map[string]byte{Topic: 1, StateTopic: 1, AvailabilityTopic: 1, ResultsTopic: 1}
 
 type Repository interface {
 	InsertSample(context.Context, telemetry.Sample, time.Time) (bool, error)
@@ -30,6 +33,7 @@ type Repository interface {
 	SaveAvailability(context.Context, string, string, string, time.Time, bool) error
 	DeleteDeviceState(context.Context, string, string) error
 	DeleteAvailability(context.Context, string, string) error
+	SaveCommandResult(context.Context, string, string, devicestate.Result, time.Time) error
 }
 type Config struct {
 	URL, ClientID, Username, Password string
@@ -40,6 +44,8 @@ type Consumer struct {
 	repo      Repository
 	logger    *slog.Logger
 	connected atomic.Bool
+	mu        sync.Mutex
+	live      mqtt.Client // Set while subscribed; commands go out on this connection.
 }
 
 func New(config Config, repo Repository, logger *slog.Logger) *Consumer {
@@ -54,25 +60,7 @@ func (c *Consumer) Connected() bool { return c.connected.Load() }
 // state and availability are retained by design and are always handled.
 func (c *Consumer) Handle(ctx context.Context, topic string, payload []byte, retained bool) (bool, error) {
 	if source, device, kind, ok := devicestate.ParseTopic(topic); ok {
-		// An empty message clears a retained topic: the device is gone.
-		if len(payload) == 0 && kind == "availability" {
-			return true, c.repo.DeleteAvailability(ctx, source, device)
-		}
-		if len(payload) == 0 {
-			return true, c.repo.DeleteDeviceState(ctx, source, device)
-		}
-		if kind == "availability" {
-			value, err := devicestate.DecodeAvailability(payload)
-			if err != nil {
-				return false, telemetry.ErrInvalid
-			}
-			return true, c.repo.SaveAvailability(ctx, source, device, value, time.Now(), retained)
-		}
-		state, err := devicestate.Decode(source, device, payload)
-		if err != nil {
-			return false, telemetry.ErrInvalid
-		}
-		return true, c.repo.SaveDeviceState(ctx, state, time.Now(), retained)
+		return c.handleManaged(ctx, source, device, kind, payload, retained)
 	}
 	if retained {
 		return false, nil
@@ -85,6 +73,37 @@ func (c *Consumer) Handle(ctx context.Context, topic string, payload []byte, ret
 		return false, telemetry.ErrInvalid
 	}
 	return c.repo.InsertSample(ctx, s, time.Now())
+}
+
+func (c *Consumer) handleManaged(ctx context.Context, source, device, kind string, payload []byte, retained bool) (bool, error) {
+	switch {
+	case kind == "results":
+		// Answers are never retained by a well-behaved receiver; a retained one is stale.
+		if retained {
+			return false, nil
+		}
+		result, err := devicestate.DecodeResult(payload)
+		if err != nil {
+			return false, telemetry.ErrInvalid
+		}
+		return true, c.repo.SaveCommandResult(ctx, source, device, result, time.Now())
+	// An empty message clears a retained topic: the device is gone.
+	case len(payload) == 0 && kind == "availability":
+		return true, c.repo.DeleteAvailability(ctx, source, device)
+	case len(payload) == 0:
+		return true, c.repo.DeleteDeviceState(ctx, source, device)
+	case kind == "availability":
+		value, err := devicestate.DecodeAvailability(payload)
+		if err != nil {
+			return false, telemetry.ErrInvalid
+		}
+		return true, c.repo.SaveAvailability(ctx, source, device, value, time.Now(), retained)
+	}
+	state, err := devicestate.Decode(source, device, payload)
+	if err != nil {
+		return false, telemetry.ErrInvalid
+	}
+	return true, c.repo.SaveDeviceState(ctx, state, time.Now(), retained)
 }
 
 type message struct {
@@ -138,7 +157,7 @@ func (c *Consumer) Run(ctx context.Context) {
 	// registers its handler.
 	options.SetDefaultPublishHandler(handler)
 	client := mqtt.NewClient(options)
-	defer func() { c.connected.Store(false); client.Disconnect(250) }()
+	defer func() { c.setLive(nil); c.connected.Store(false); client.Disconnect(250) }()
 	retry := time.Second
 	for ctx.Err() == nil {
 		if err := wait(ctx, client.Connect()); err != nil {
@@ -168,6 +187,7 @@ func (c *Consumer) Run(ctx context.Context) {
 			continue
 		}
 		retry = time.Second
+		c.setLive(client)
 		c.connected.Store(true)
 		c.logger.Info("MQTT subscription ready")
 	connected:
@@ -176,6 +196,7 @@ func (c *Consumer) Run(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-lost:
+				c.setLive(nil)
 				break connected
 			case m := <-inbox:
 				operation, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -200,6 +221,31 @@ func (c *Consumer) Run(ctx context.Context) {
 		// acknowledge a different message. The broker redelivers them instead.
 		drain(inbox)
 	}
+}
+func (c *Consumer) setLive(client mqtt.Client) {
+	c.mu.Lock()
+	c.live = client
+	c.mu.Unlock()
+}
+
+// PublishCommand sends a command with QoS 1, never retained: a retained command would run
+// again whenever the receiver reconnects.
+func (c *Consumer) PublishCommand(ctx context.Context, source, device string, command devicestate.Command) error {
+	c.mu.Lock()
+	client := c.live
+	c.mu.Unlock()
+	if client == nil {
+		return commands.ErrUnavailable
+	}
+	payload, err := command.Payload()
+	if err != nil {
+		return err
+	}
+	err = wait(ctx, client.Publish(devicestate.Topic(source, device, "commands"), 1, false, payload))
+	if errors.Is(err, mqtt.ErrNotConnected) {
+		return commands.ErrUnavailable // Refused before it entered the client's store.
+	}
+	return err
 }
 func drain(inbox chan message) {
 	for {

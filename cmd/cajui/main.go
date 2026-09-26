@@ -39,14 +39,16 @@ func run(ctx context.Context) error {
 		return err
 	}
 	defer db.Close()
+	var options []httpapi.Option
 	if c.MQTT.URL != "" {
 		consumer := mqttingest.New(c.MQTT, db, slog.Default())
+		options = append(options, httpapi.WithCommands(consumer))
 		mqttContext, stop := context.WithCancel(ctx)
 		done := make(chan struct{})
 		go func() { defer close(done); consumer.Run(mqttContext) }()
 		defer func() { stop(); <-done }()
 	}
-	handler, err := httpapi.New(db, c.Token, slog.Default())
+	handler, err := httpapi.New(db, c.Token, slog.Default(), options...)
 	if err != nil {
 		return err
 	}

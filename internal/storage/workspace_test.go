@@ -257,7 +257,7 @@ func TestWorkspaceMigrationBackfillsAllHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := catalog(t, s)
-	if _, err = s.db.Exec(`DROP TABLE workspace_measurements; DROP TABLE workspace_sensors; DROP TABLE workspace_devices; DROP TABLE workspace_layout; DROP TABLE device_states; DROP TABLE device_availability; PRAGMA user_version=2;`); err != nil {
+	if _, err = s.db.Exec(`DROP TABLE workspace_measurements; DROP TABLE workspace_sensors; DROP TABLE workspace_devices; DROP TABLE workspace_layout; DROP TABLE device_states; DROP TABLE device_availability; DROP TABLE device_commands; PRAGMA user_version=2;`); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()

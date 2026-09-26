@@ -105,6 +105,8 @@ All `/api` routes require `Authorization: Bearer <CAJUI_API_TOKEN>`.
 - `GET /`, `/devices`, `/sensors`: local workspace pages (no login, loopback hosts only).
 - `GET /api/v1/readings`: JSON list, most recently received first.
 - `GET /api/v1/device-states`: latest [device state](#device-state) per device.
+- `POST /ui-api/commands`, `GET /ui-api/commands/{id}`: [device commands](#device-commands)
+  from the local page (same origin and page capability, like workspace edits).
 - `POST /api/v1/readings`: one JSON object, `Content-Type: application/json`.
 
 Fields: `node_id`, `sensor_id`, `session_id` and `metric` are 1–64 characters
@@ -225,12 +227,24 @@ until a live message replaces it. An empty message on either topic, which clears
 retained topic, removes that state or availability. A device seen under several sources
 has moved; only its most recent state is listed. State is not telemetry and never enters
 sample history.
-Central has no write access to these topics and sends no commands.
+Central has no write access to these topics.
 
 The generated ACL lets each producer write `manage/v1/<source_id>/+/availability`,
 `.../state` and `.../results` and read `.../commands`; Central and `homeassistant` read
-state and availability. On another broker, grant the same topics before updating
-receivers.
+state and availability; Central also writes `manage/v1/+/+/commands` and reads
+`.../results`. On another broker, grant the same topics before updating receivers.
+
+### Device commands
+
+A receiver whose state lists the `pairing` capability gets a Search for transmitters
+button on the dashboard: it opens the receiver's two-minute pairing window, lists the
+transmitters asking to join with their signal, and adds one on request. With `revoke`,
+a transmitter's details offer a confirmed Revoke. Central checks the command against the
+advertised capabilities, records it, publishes it with QoS 1 and never retained, and
+follows the receiver's answer on `manage/v1/+/+/results`. An answer that does not arrive
+within 30 seconds is reported as not delivered. The broker's authentication and ACL are
+the whole authorization of a command, so only Central's account may write commands.
+Every action remains available on the receiver's own setup page.
 
 ### Connecting an existing broker
 

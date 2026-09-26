@@ -150,7 +150,7 @@ func TestErrorsAndLimits(t *testing.T) {
 }
 func TestRejectNewerSchema(t *testing.T) {
 	s := openTest(t)
-	if _, err := s.db.Exec("PRAGMA user_version=5"); err != nil {
+	if _, err := s.db.Exec("PRAGMA user_version=6"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.migrate(); err == nil {

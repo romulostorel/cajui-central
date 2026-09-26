@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cajui/cajui-central/internal/commands"
 	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/telemetry"
 	"github.com/cajui/cajui-central/internal/workspace"
@@ -32,6 +33,7 @@ type Repository interface {
 	RecentSamples(context.Context, int) ([]telemetry.StoredSample, error)
 	Devices(context.Context, time.Time) ([]telemetry.Device, error)
 	DeviceStates(context.Context) ([]devicestate.Stored, error)
+	commands.Repository
 }
 
 //go:embed index.html
@@ -43,9 +45,11 @@ type server struct {
 	uiToken string
 	token   [32]byte
 	logger  *slog.Logger
+	// Nil when MQTT is not configured: commands then answer 503.
+	publisher commands.Publisher
 }
 
-func New(repo Repository, token string, logger *slog.Logger) (http.Handler, error) {
+func New(repo Repository, token string, logger *slog.Logger, options ...Option) (http.Handler, error) {
 	if len(token) < 24 {
 		return nil, errors.New("API token must contain at least 24 characters")
 	}
@@ -53,6 +57,9 @@ func New(repo Repository, token string, logger *slog.Logger) (http.Handler, erro
 		logger = slog.Default()
 	}
 	s := &server{repo: repo, token: sha256.Sum256([]byte(token)), logger: logger, uiToken: rand.Text()}
+	for _, option := range options {
+		option(s)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /{$}", s.localPage(s.index))
@@ -60,6 +67,8 @@ func New(repo Repository, token string, logger *slog.Logger) (http.Handler, erro
 	mux.HandleFunc("GET /sensors", s.localPage(s.index))
 	mux.HandleFunc("PUT /ui-api/{kind}/{id}", s.editWorkspace)
 	mux.HandleFunc("GET /ui/{path...}", serveUIAsset)
+	mux.HandleFunc("POST /ui-api/commands", s.localPage(s.sendCommand))
+	mux.HandleFunc("GET /ui-api/commands/{id}", s.localPage(s.commandStatus))
 
 	mux.Handle("GET /api/v1/readings", s.authorize(http.HandlerFunc(s.list)))
 	mux.Handle("GET /api/v1/samples", s.authorize(http.HandlerFunc(s.samples)))

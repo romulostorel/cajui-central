@@ -19,13 +19,19 @@ import (
 // MaxStateBytes bounds one state message; the firmware's buffer is 1024 bytes.
 const MaxStateBytes = 4096
 
-var ErrInvalid = errors.New("invalid device state")
+var (
+	ErrInvalid        = errors.New("invalid device state")
+	ErrUnknownDevice  = errors.New("device state not found")
+	ErrUnknownCommand = errors.New("command not found")
+)
 
 var (
 	sourceID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 	deviceID = regexp.MustCompile(`^[0-9a-f]{16}$`)
 	token    = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
 	version  = regexp.MustCompile(`^[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}$`)
+	// command_id of the contract: 1–64 characters, starting with a letter or digit.
+	commandID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$`)
 )
 
 // State keeps the fields Central understands. Unknown fields are ignored, as the
@@ -113,7 +119,7 @@ func ParseTopic(topic string) (source, device, kind string, ok bool) {
 	if len(parts) != 5 || parts[0] != "manage" || parts[1] != "v1" || !sourceID.MatchString(parts[2]) || !deviceID.MatchString(parts[3]) {
 		return "", "", "", false
 	}
-	if parts[4] != "state" && parts[4] != "availability" {
+	if parts[4] != "state" && parts[4] != "availability" && parts[4] != "results" {
 		return "", "", "", false
 	}
 	return parts[2], parts[3], parts[4], true

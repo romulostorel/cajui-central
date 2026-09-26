@@ -9,19 +9,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cajui/cajui-central/internal/commands"
 	"github.com/cajui/cajui-central/internal/devicestate"
 	"github.com/cajui/cajui-central/internal/telemetry"
 )
 
 type repository struct {
-	calls, states, availability, deleted int
-	retained                             bool
-	err                                  error
+	calls, states, availability, deleted, results int
+	retained                                      bool
+	err                                           error
 }
 
 func (r *repository) SaveDeviceState(_ context.Context, _ devicestate.State, _ time.Time, retained bool) error {
 	r.states++
 	r.retained = retained
+	return r.err
+}
+func (r *repository) SaveCommandResult(context.Context, string, string, devicestate.Result, time.Time) error {
+	r.results++
 	return r.err
 }
 func (r *repository) DeleteDeviceState(context.Context, string, string) error {
@@ -109,9 +114,26 @@ func TestHandleDeviceStateAndAvailability(t *testing.T) {
 	if repo.deleted != 2 || repo.states != 1 || repo.availability != 1 {
 		t.Fatal(repo)
 	}
+	results := devicestate.Topic("demo-source", "00000000000000d1", "results")
+	answer := []byte(`{"version":1,"command_id":"central-1","status":"applied","reason":null}`)
+	if ok, e := c.Handle(context.Background(), results, answer, false); !ok || e != nil || repo.results != 1 {
+		t.Fatal(ok, e, repo)
+	}
+	if ok, e := c.Handle(context.Background(), results, answer, true); ok || e != nil || repo.results != 1 {
+		t.Fatal("retained result accepted")
+	}
+	if _, e := c.Handle(context.Background(), results, []byte("{}"), false); !errors.Is(e, telemetry.ErrInvalid) {
+		t.Fatal(e)
+	}
 	repo.err = errors.New("storage failed")
 	if _, e := c.Handle(context.Background(), state, b, false); e == nil || settled(e) {
 		t.Fatal("swallowed storage failure")
+	}
+}
+func TestPublishCommandWithoutConnection(t *testing.T) {
+	c := New(Config{}, &repository{}, nil)
+	if err := c.PublishCommand(context.Background(), "s", "00000000000000d1", devicestate.Command{ID: "x", Type: "pairing.open"}); !errors.Is(err, commands.ErrUnavailable) {
+		t.Fatal(err)
 	}
 }
 func TestRunCanceledAndUnavailable(t *testing.T) {

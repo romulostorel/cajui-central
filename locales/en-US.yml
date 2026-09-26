@@ -319,3 +319,38 @@ en-US:
       deep_sleep: Wake from sleep
       external: Reset button
       other: Other
+  commands:
+    request_name: Transmitter %{id}
+    search: Search for transmitters
+    stop: Stop searching
+    add: Add
+    revoke: Revoke transmitter
+    revoke_confirm: Revoke %{name}? It stops being accepted until it is paired again with its button.
+    requests: Asking to join
+    no_requests: Hold the transmitter's PRG button for three seconds to make it ask.
+    conflict: Two devices claimed this ID; search again.
+    in_progress: Another command is still running; wait for its answer.
+    sending: Sending to the receiver…
+    waiting_node: The receiver sent the offer; waiting for the transmitter to confirm.
+    undelivered: The receiver did not answer. Check that it is online and try again.
+    applied:
+      pairing_open: Search started for two minutes.
+      pairing_close: Search stopped.
+      pairing_accept: Transmitter paired.
+      node_revoke: Transmitter revoked.
+    reasons:
+      invalid: The receiver did not understand the command.
+      unsupported: This firmware does not support that action.
+      busy: The receiver was busy; try again.
+      unknown_node: The receiver does not know that transmitter.
+      closed: The search window is closed; start a new search.
+      not_requested: That transmitter is no longer asking to join.
+      conflict: Two devices claimed this ID; search again.
+      full: The receiver has no free slot for another transmitter.
+      superseded: Another offer replaced this one.
+      storage: The receiver could not save the change.
+      failed: The receiver could not complete the action.
+    errors:
+      send: Could not send the command. Try again.
+      offline: Central is not connected to the broker.
+      status: Could not check the answer. Refresh the page.

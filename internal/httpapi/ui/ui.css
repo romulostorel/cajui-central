@@ -2052,3 +2052,54 @@ cj-reading {
   height: 20px;
   margin-top: 2px;
 }
+
+/* Management commands: pairing on the receiver card, revocation in device details. */
+.receiver-actions {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+.pairing-requests {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+.pairing-requests h4 {
+  margin: 0;
+  font-size: var(--text-body);
+}
+.pairing-request {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+.pairing-request > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pairing-request small {
+  color: var(--warning);
+}
+.button.danger {
+  margin-top: var(--space-4);
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.button.danger:hover {
+  background: var(--danger-soft);
+}
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+/* Short values in a narrow card wrap between words, never inside one: the label gives
+   way first. */
+.receiver-card .detail-list dd {
+  overflow-wrap: normal;
+  min-width: auto;
+}

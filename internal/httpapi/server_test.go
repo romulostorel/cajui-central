@@ -141,6 +141,18 @@ func TestStorageFailure(t *testing.T) {
 func (brokenRepo) RecentSamples(context.Context, int) ([]telemetry.StoredSample, error) {
 	return nil, errors.New("database failure")
 }
+func (brokenRepo) DeviceState(context.Context, string, string) (devicestate.State, error) {
+	return devicestate.State{}, errors.New("private database failure")
+}
+func (brokenRepo) InsertCommand(context.Context, string, string, devicestate.Command, time.Time) error {
+	return errors.New("private database failure")
+}
+func (brokenRepo) DeleteCommand(context.Context, string) error {
+	return errors.New("private database failure")
+}
+func (brokenRepo) Command(context.Context, string) (devicestate.CommandRecord, error) {
+	return devicestate.CommandRecord{}, errors.New("private database failure")
+}
 func (brokenRepo) DeviceStates(context.Context) ([]devicestate.Stored, error) {
 	return nil, errors.New("private database failure")
 }
